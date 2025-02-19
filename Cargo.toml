@@ -2,6 +2,35 @@
 name = "sound_generator"
 version = "0.1.0"
 edition = "2021"
+authors = ["Mihail Dimitrov <mihailvd@icloud.com>"]
+repository = "https://github.com/mihailvd/sound-generator"
+license = "MIT"
+description = "A simple Rust-based sound generator"
 
 [dependencies]
-rodio = "0.17.3"
+rodio = "0.20.1"
+
+[package.metadata.bundle]
+name = "SoundGenerator"
+identifier = "com.mihaildimitrov.soundgenerator"
+version = "1.0.0"
+icon = ["assets/icon.icns"]
+resources = ["assets/sound"]
+category = "Music"
+short_description = "A simple Rust-based sound generator"
+long_description = """A Rust-based synthesizer that plays sounds interactively."""
+
+[package.metadata.wix]
+authors = "Mihail Dimitrov"
+license = "LICENSE.md"
+upgrade-guid = "556BF741-ED5A-4857-9CC7-5738FBA4179A"
+path-guid = "5A235DC1-B106-44E9-B7D6-80ABA641D7EB"
+
+[package.metadata.rpm]
+package = "sound_generator"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+sound_generator = { path = "/usr/bin/sound_generator" }

@@ -1,0 +1,116 @@
+name: Build Sound Generator for All Platforms
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pulseaudio alsa-utils
+
+      - name: Install dependencies (macOS only)
+        if: runner.os == 'macOS'
+        run: brew install pulseaudio
+
+      - name: Install cargo dependencies
+        if: runner.os == 'Linux' || runner.os == 'macOS' || runner.os == 'Windows'
+        run: cargo install cargo-deb cargo-wix cargo-bundle
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build macOS (Intel & ARM)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+
+      - name: Create Universal Binary (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p target/universal-macos
+          lipo -create -output target/universal-macos/SoundGenerator \
+            target/x86_64-apple-darwin/release/sound_generator \
+            target/aarch64-apple-darwin/release/sound_generator
+
+      - name: Install cargo-wix (Windows only)
+        if: runner.os == 'Windows'
+        run: cargo install cargo-wix
+
+      - name: Package Windows Installer (Windows only)
+        if: runner.os == 'Windows'
+        run: cargo wix
+
+      - name: Package Linux DEB (Debian-based)
+        if: runner.os == 'Linux'
+        run: cargo deb
+
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundGenerator-macOS
+          path: target/universal-macos/SoundGenerator
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundGenerator-Windows
+          path: target/wix/*.msi
+
+      - name: Upload Linux DEB artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundGenerator-Linux-DEB
+          path: target/debian/*.deb
+
+  build-fedora:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+
+    steps:
+      - name: Install dependencies (Fedora)
+        run: dnf install -y alsa-lib-devel pulseaudio-libs-devel rpm-build gcc gcc-c++ make
+
+      - name: Install Rust via Rustup (Fedora)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install cargo dependencies
+        run: cargo install cargo-rpm
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build SoundGenerator binary
+        run: cargo build --release
+
+      - name: Package Fedora RPM
+        run: cargo rpm build
+
+      - name: Upload Fedora RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundGenerator-Fedora-RPM
+          path: target/release/rpmbuild/RPMS/x86_64/*.rpm
