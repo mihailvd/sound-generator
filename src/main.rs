@@ -12,10 +12,15 @@ fn main() {
     loop {
         match process_frequency_input() {
             Some(frequency) => {
+                if frequency == 0.0 {
+                    continue;
+                }
+
                 println!("Playing {} Hz...", frequency);
                 let source =
                     SineWave::new(frequency, SAMPLE_RATE, DURATION_SECONDS).amplify(AMPLITUDE);
                 let sink = Sink::try_new(&stream_handle).unwrap();
+
                 sink.append(source);
                 sink.sleep_until_end();
             }
@@ -38,7 +43,7 @@ fn process_frequency_input() -> Option<f32> {
         Ok(frequency) => Some(frequency),
         Err(_) => {
             println!("Invalid input. Please enter a number.");
-            None
+            Some(0.0)
         }
     }
 }
