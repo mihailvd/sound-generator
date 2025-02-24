@@ -1,98 +1,85 @@
+mod wave_types;
+
 use rodio::{source::Source, OutputStream, Sink};
-use std::f32::consts::PI;
 use std::io;
-use std::time::Duration;
+use std::str::FromStr;
+use wave_types::*;
 
 const AMPLITUDE: f32 = 0.2;
 const SAMPLE_RATE: u32 = 44100;
 const DURATION_SECONDS: u64 = 1;
 
+const PROMPT_FREQUENCY: &str = "Enter frequency in Hz (or 'exit' to quit): ";
+const PROMPT_WAVE_TYPE: &str = "Enter wave type (sine, square, sawtooth, triangle): ";
+
 fn main() {
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     loop {
         match process_frequency_input() {
-            Some(frequency) => {
-                if frequency == 0.0 {
+            Some(user_input) => {
+                if user_input.frequency == 0.0 {
                     continue;
                 }
 
-                println!("Playing {} Hz...", frequency);
-                let source =
-                    SineWave::new(frequency, SAMPLE_RATE, DURATION_SECONDS).amplify(AMPLITUDE);
-                let sink = Sink::try_new(&stream_handle).unwrap();
-
-                sink.append(source);
-                sink.sleep_until_end();
+                play_wave(&stream_handle, user_input);
             }
             None => break,
         }
     }
 }
 
-fn process_frequency_input() -> Option<f32> {
-    println!("Enter frequency in Hz (or 'exit' to quit): ");
+fn process_frequency_input() -> Option<WaveInput> {
+    println!("{}", PROMPT_FREQUENCY);
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
-    let input = input.trim();
 
-    if input == "exit" {
+    let trimmed_input = input.trim();
+    if trimmed_input.eq_ignore_ascii_case("exit") {
         return None;
     }
 
-    match input.parse::<f32>() {
-        Ok(frequency) => Some(frequency),
+    let frequency = match trimmed_input.parse::<f32>() {
+        Ok(freq) => freq,
         Err(_) => {
-            println!("Invalid input. Please enter a number.");
-            Some(0.0)
+            println!("Invalid frequency. Please enter a valid number.");
+            return Some(WaveInput {
+                frequency: 0.0,
+                wave_type: WaveType::Sine, // Fallback
+            });
         }
-    }
+    };
+
+    println!("{}", PROMPT_WAVE_TYPE);
+    let mut wave_type_input = String::new();
+    io::stdin().read_line(&mut wave_type_input).unwrap();
+
+    let wave_type = WaveType::from_str(wave_type_input.trim()).unwrap_or_else(|_| {
+        println!("Invalid wave type. Defaulting to Sine.");
+        WaveType::Sine // Fallback
+    });
+
+    Some(WaveInput {
+        frequency,
+        wave_type,
+    })
 }
 
-struct SineWave {
-    duration: u64,
+fn play_wave(stream_handle: &rodio::OutputStreamHandle, input: WaveInput) {
+    println!("Playing {} Hz...", input.frequency);
+    let source = Wave::new(
+        input.wave_type,
+        input.frequency,
+        SAMPLE_RATE,
+        DURATION_SECONDS,
+    )
+    .amplify(AMPLITUDE);
+
+    let sink = Sink::try_new(stream_handle).unwrap();
+    sink.append(source);
+    sink.sleep_until_end();
+}
+
+struct WaveInput {
     frequency: f32,
-    sample_rate: u32,
-    sample_clock: f32,
-}
-
-impl SineWave {
-    fn new(frequency: f32, sample_rate: u32, duration: u64) -> Self {
-        Self {
-            duration,
-            frequency,
-            sample_rate,
-            sample_clock: 0.0,
-        }
-    }
-}
-
-impl Iterator for SineWave {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.sample_clock >= self.duration as f32 {
-            return None;
-        }
-        let value = (2.0 * PI * self.frequency * self.sample_clock).sin();
-        self.sample_clock += 1.0 / self.sample_rate as f32;
-        Some(value)
-    }
-}
-
-impl Source for SineWave {
-    fn current_frame_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn channels(&self) -> u16 {
-        1
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs(self.duration))
-    }
+    wave_type: WaveType,
 }
