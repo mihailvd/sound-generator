@@ -25,12 +25,11 @@ impl WaveType {
             WaveType::Sawtooth => {
                 2.0 * (frequency * normalized_clock - (frequency * normalized_clock).floor()) - 1.0
             }
-            WaveType::Triangle => (2.0
-                * ((2.0 * frequency * normalized_clock).floor()
-                    - (frequency * normalized_clock).floor())
-                .abs()
-                - 1.0)
-                .abs(),
+            WaveType::Triangle => {
+                4.0 * (frequency * normalized_clock - (frequency * normalized_clock).floor() - 0.5)
+                    .abs()
+                    - 1.0
+            }
         }
     }
 }
